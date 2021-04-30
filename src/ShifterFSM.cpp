@@ -2,9 +2,13 @@
 
 // Uncomment to activate debug statements
 // #define DEBUG
+#ifdef DEBUG
+#include <Arduino.h>
+#endif
 
-ShifterFSM::ShifterFSM(unsigned long tSettle)
+ShifterFSM::ShifterFSM(sysTimeFunc getSysTime, unsigned long tSettle)
 {
+    _getSysTime = _getSysTime;
     _tSettle = tSettle;
 }
 
@@ -53,7 +57,6 @@ ShifterFSM::mode ShifterFSM::getStickMode(int val)
 
 ShifterFSM::mode ShifterFSM::run(int val)
 {
-
     switch (currentState)
     {
     case POLLING:
@@ -68,12 +71,13 @@ ShifterFSM::mode ShifterFSM::run(int val)
 #endif
             currentState = ARMED;
             intentMode = polledMode;
-            timer = millis();
+            _timer = _getSysTime();
         }
         break;
     case ARMED:
-        // Only look again after some time has passed
-        if (millis() - timer > _tSettle)
+
+        // Only look again after settle time has passed
+        if ((_getSysTime() - _timer > _tSettle))
         {
 #ifdef DEBUG
             Serial.print("-SETTLED");
@@ -96,10 +100,7 @@ ShifterFSM::mode ShifterFSM::run(int val)
         Serial.println("--UPDATING");
 #endif
         activeMode = intentMode;
-        if (activeMode != NEUTRAL)
-        {
-            updateFlag = true;
-        }
+        updateFlag = true;
         currentState = POLLING;
         break;
     }
@@ -107,6 +108,7 @@ ShifterFSM::mode ShifterFSM::run(int val)
     Serial.print("Current: ");
     Serial.println(activeMode);
 #endif
+    _prevVal = val;
     return activeMode;
 }
 

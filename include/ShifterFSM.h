@@ -1,4 +1,4 @@
-#include <Arduino.h>
+#include <WString.h>
 
 // Stick Position Constants
 #define LIGHT_R 460
@@ -8,7 +8,11 @@
 #define LIGHT_4 -253
 #define LIGHT_5 -60
 #define LIGHT_6 -170
-#define LIGHT_THRES 30
+#define LIGHT_THRES 40
+
+
+// Typedef for system time function
+typedef unsigned long (*sysTimeFunc)();
 
 class ShifterFSM
 {
@@ -25,7 +29,7 @@ public:
         SIX,
         NEUTRAL
     }; // lighting modes
-    ShifterFSM(unsigned long);
+    ShifterFSM(sysTimeFunc, unsigned long);
     void init(int);           // Initialize the shifter with a value
     mode run(int);            // FSM loop to run controller
     String getModeName(mode); // Get the string representation of the passed in mode
@@ -42,7 +46,9 @@ private:
     states currentState;                     // Current state of the controller
     mode getStickMode(int);                  // Get map passed value to stick mode
     mode activeMode, intentMode, polledMode; // Current Mode of system, the potential next mode, mode represented by the last sensor read
-    unsigned long timer;                     // Timer used to track settling time
-    unsigned long _tSettle;                  // Settle time for stick changes
-    bool updateFlag = false;                 // Flag to check if the mode was recently changed
+    int _prevVal = 0;
+    sysTimeFunc _getSysTime; // Reference to parent scope function to read system time
+    unsigned long _timer;    // Timer used to track settling time
+    unsigned long _tSettle;  // Settle time for stick changes
+    bool updateFlag = false; // Flag to check if the mode was recently changed
 };
