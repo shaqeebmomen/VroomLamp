@@ -1,5 +1,11 @@
 #include <MotorFSM.h>
 
+// #define DEBUG
+
+#ifdef DEBUG
+#include <Arduino.h>
+#endif
+
 /**
  * Constructor for finite state machine object
  * @param trigger function to run to trigger hardware (assumed to be a toggle)
@@ -23,13 +29,22 @@ void MotorFSM::init()
 {
     _init();
     _shutoff();
+    currentState = IDLE;
 }
 
 void MotorFSM::run()
 {
+#ifdef DEBUG
+    Serial.print("| ");
+    Serial.print(_getSysTime());
+    Serial.print(" | ");
+#endif
     switch (currentState)
     {
     case TRIGGERED:
+#ifdef DEBUG
+        Serial.print("-TRIGGERED");
+#endif
         // Reset timer
         _timer = _getSysTime();
         // Turn on motor pin
@@ -38,6 +53,9 @@ void MotorFSM::run()
         currentState = RUNNING;
         break;
     case RUNNING:
+#ifdef DEBUG
+        Serial.print("-RUNNING");
+#endif
         // Check runtime
         if (_getSysTime() - _timer > _runtime) // If motor has been on for runtime
         {
@@ -48,6 +66,9 @@ void MotorFSM::run()
         }
         break;
     case IDLE:
+#ifdef DEBUG
+        Serial.print("-IDLE");
+#endif
         // Do nothing
         break;
     }

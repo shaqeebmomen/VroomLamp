@@ -1,14 +1,15 @@
 #include <ShifterFSM.h>
 
 // Uncomment to activate debug statements
-// #define DEBUG
+#define DEBUG
+
 #ifdef DEBUG
 #include <Arduino.h>
 #endif
 
 ShifterFSM::ShifterFSM(sysTimeFunc getSysTime, unsigned long tSettle)
 {
-    _getSysTime = _getSysTime;
+    _getSysTime = getSysTime;
     _tSettle = tSettle;
 }
 
@@ -21,6 +22,7 @@ void ShifterFSM::init(int val)
 // Get the mode corresponding to a given read hall effect value
 ShifterFSM::mode ShifterFSM::getStickMode(int val)
 {
+
     if (abs(val - LIGHT_R) < LIGHT_THRES)
     {
         return ShifterFSM::R;
@@ -55,32 +57,53 @@ ShifterFSM::mode ShifterFSM::getStickMode(int val)
     }
 }
 
-ShifterFSM::mode ShifterFSM::run(int val)
+ShifterFSM::mode ShifterFSM::run(int val, bool isMoving)
 {
+    if (isMoving)
+    {
+        currentState = MOVING;
+    }
+
     switch (currentState)
     {
     case POLLING:
 #ifdef DEBUG
         Serial.print("-POLLING");
+        Serial.flush();
+
 #endif
         polledMode = getStickMode(val);
         if (polledMode != activeMode)
         {
-#ifdef DEBUG
-            Serial.print("-ARMING");
-#endif
+
             currentState = ARMED;
             intentMode = polledMode;
+#ifdef DEBUG
+            Serial.print("-ARMING");
+            Serial.print(";Intent: ");
+            Serial.print(intentMode);
+            Serial.flush();
+
+#endif
             _timer = _getSysTime();
         }
+        break;
+    case MOVING:
+#ifdef DEBUG
+        Serial.print("-MOVING");
+        Serial.flush();
+#endif
+        activeMode = NEUTRAL;
+        currentState = POLLING;
         break;
     case ARMED:
 
         // Only look again after settle time has passed
-        if ((_getSysTime() - _timer > _tSettle))
+        if ((_getSysTime() - _timer) > _tSettle)
         {
 #ifdef DEBUG
             Serial.print("-SETTLED");
+            Serial.flush();
 #endif
             polledMode = getStickMode(val);
             // Check against the original change
@@ -98,17 +121,24 @@ ShifterFSM::mode ShifterFSM::run(int val)
     case UPDATE:
 #ifdef DEBUG
         Serial.println("--UPDATING");
+        Serial.flush();
+
 #endif
         activeMode = intentMode;
-        updateFlag = true;
+        if (activeMode != NEUTRAL)
+        {
+            updateFlag = true;
+        }
         currentState = POLLING;
         break;
-    }
+    } // End switch
+
 #ifdef DEBUG
     Serial.print("Current: ");
     Serial.println(activeMode);
+    Serial.flush();
+
 #endif
-    _prevVal = val;
     return activeMode;
 }
 
