@@ -36,7 +36,7 @@
 
 // Numerical Constants
 // #define T_LOOP 0     // Execution loop time
-#define T_MOTOR 300  // Time motor will be on for after a stick shift
+#define T_MOTOR 200  // Time motor will be on for after a stick shift
 #define T_SETTLE 150 // Settle time for stick position change
 #define POT_THRES 15 // Threshold to read new pot values
 #define MOVE_THRES 16
