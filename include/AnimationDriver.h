@@ -1,4 +1,6 @@
 #include <stdint.h>
+#define ANIMATION // Used to stop duplicate imports
+
 namespace AnimationDriver
 {
 
@@ -37,6 +39,7 @@ namespace AnimationDriver
 
     public:
         AnimationDriver(animation, sysTimeFunc);
+        AnimationDriver(sysTimeFunc);
         void updateAnimation(animation);
         void run(drivingFunc); // Takes a pointer to the parent function that runs hardware
         void restart();        // Used to reset all time-dependant logic

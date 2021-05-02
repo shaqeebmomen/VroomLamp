@@ -1,7 +1,7 @@
 #include <ShifterFSM.h>
 
 // Uncomment to activate debug statements
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 #include <Arduino.h>

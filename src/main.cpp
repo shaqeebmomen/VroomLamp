@@ -11,18 +11,24 @@
  */
 
 #include <Arduino.h>
+
 #include <EEPROM.h>
 #include <Adafruit_NeoPixel.h>
 #include <ShifterFSM.h>
 #include <MotorFSM.h>
 #include <AnimationDriver.h>
+#include <DefaultAnimations.h>
 
 // DEBUG FLAGS
 #define DEBUG
 // #define DEBUG_MOVING
 // #define DEBUG_STICKS
-#define DEBUG_MODE
-#define DEBUG_LED
+// #define DEBUG_MODE
+// #define DEBUG_LED
+#define DEBUG_ANIMATION
+
+// Routine enable flags
+// #define EN_MOTOR
 
 // Hardware defs
 #define POT_PIN A6
@@ -38,7 +44,7 @@
 // #define T_LOOP 0     // Execution loop time
 #define T_MOTOR 200  // Time motor will be on for after a stick shift
 #define T_SETTLE 150 // Settle time for stick position change
-#define POT_THRES 15 // Threshold to read new pot values
+#define POT_THRES 10 // Threshold to read new pot values
 #define MOVE_THRES 16
 #define MOVE_GAIN 3
 #define T_MOVE_LOOP 30
@@ -51,6 +57,8 @@ ShifterFSM StickControl(millis, T_SETTLE);
 ShifterFSM::mode currentMode;
 
 Adafruit_NeoPixel strip(NUM_LEDS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+AnimationDriver::AnimationDriver animator(BREATHE_COLOR(0,255,255,5000), millis);
 
 // Current and previous values for LED brightness (used to only change brightness when needed)
 uint16_t LEDscale;
@@ -204,9 +212,10 @@ void setup()
   MotorControl.init();
   // Initial Stick state
   StickControl.init(getStickPos(readStick1(MotorControl.isRunning()), readStick2(MotorControl.isRunning())));
-  // Initial Brightnes
+  // Initial Brightness
   LEDscale = analogRead(POT_PIN);
   strip.setBrightness(LEDscale / 4);
+  // Animation Controller
   // Initialize timers
   // loopTimer = millis();
 }
@@ -239,6 +248,10 @@ void loop()
 #endif
 
   currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
+#ifdef DEBUG_ANIMATION
+  animator.run([](uint8_t r, uint8_t g, uint8_t b) { strip.fill(strip.Color(r, g, b));strip.show(); });
+
+#endif
 
 #ifdef DEBUG_MOVING
   ShifterFSM::mode currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
@@ -261,12 +274,14 @@ void loop()
 
 #endif
 
-  /************ MOTOR FSM ***********/
+/************ MOTOR FSM ***********/
+#ifdef EN_MOTOR
   if (StickControl.getFlag())
   {
     MotorControl.trigger();
   }
   MotorControl.run();
+#endif
 
 /************ DRIVING LEDS ***********/
 // Pass current animation, time stamp, brightness, into animation driving function
