@@ -20,22 +20,23 @@
 #include <DefaultAnimations.h>
 
 // DEBUG FLAGS
-#define DEBUG
+// #define DEBUG
 // #define DEBUG_MOVING
 // #define DEBUG_STICKS
 // #define DEBUG_MODE
 // #define DEBUG_LED
-#define DEBUG_ANIMATION
+// #define DEBUG_STICK_TUNE
+// #define DEBUG_EEPROM
 
 // Routine enable flags
-// #define EN_MOTOR
+#define EN_MOTOR
+#define EN_ANIMATION
 
 // Hardware defs
 #define POT_PIN A6
 #define STICK_PIN_1 A7
 #define STICK_PIN_2 A5
 #define MOTOR_PIN 4
-// #define MOTOR_PIN 13
 #define PIXEL_PIN A2
 
 #define NUM_LEDS 4
@@ -45,10 +46,11 @@
 #define T_MOTOR 200  // Time motor will be on for after a stick shift
 #define T_SETTLE 150 // Settle time for stick position change
 #define POT_THRES 10 // Threshold to read new pot values
-#define MOVE_THRES 16
+#define MOVE_THRES 40
 #define MOVE_GAIN 3
 #define T_MOVE_LOOP 30
 #define FILTER_BUFF 20
+#define GEAR_COUNT 6
 
 // unsigned long loopTimer;
 
@@ -58,49 +60,114 @@ ShifterFSM::mode currentMode;
 
 Adafruit_NeoPixel strip(NUM_LEDS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-AnimationDriver::AnimationDriver animator(BREATHE_COLOR(0,255,255,5000), millis);
+AnimationDriver::AnimationDriver animator(millis);
+// Default animations
+
+const AnimationDriver::animation Solid_White PROGMEM = SOLID_COLOR(255, 255, 255);
+const AnimationDriver::animation Solid_Red PROGMEM = SOLID_COLOR(255, 0, 0);
+const AnimationDriver::animation Breathe_White PROGMEM = BREATHE_COLOR(255, 255, 255, 2000);
+const AnimationDriver::animation Solid_Green PROGMEM = SOLID_COLOR(0, 255, 0);
+const AnimationDriver::animation Rainbow PROGMEM = RAINBOW(2000);
+const AnimationDriver::animation Solid_Blue PROGMEM = SOLID_COLOR(0, 0, 255);
+
+const AnimationDriver::animation defaults[] PROGMEM = {
+    Solid_White,
+    Solid_Red,
+    Breathe_White,
+    Solid_Green,
+    Rainbow,
+    Solid_Blue};
+
+AnimationDriver::animation currentAnim;
 
 // Current and previous values for LED brightness (used to only change brightness when needed)
 uint16_t LEDscale;
 uint16_t prevLEDScale;
 
+// Load specific animation from eeprom into currentAnim
+void EEPROM_Load(uint8_t index)
+{
+#ifdef DEBUG_EERPROM
+  Serial.print("Getting Index: ");
+  Serial.print(index);
+  Serial.print(" Addr: ");
+  Serial.println((int)(index * sizeof(currentAnim)));
+#endif
+  EEPROM.get((int)(index * sizeof(currentAnim)), currentAnim);
+#ifdef DEBUG_EEPROM
+  Serial.println(currentAnim.frameCount);
+  Serial.println("Animation Loaded");
+  Serial.flush();
+#endif
+}
+
+// Write defaults to eeprom
+void EEPROM_WriteDefaults()
+{
+#ifdef DEBUG_EEPROM
+  Serial.println("RESETTING ANIMATIONS");
+  Serial.flush();
+#endif
+
+  // Clear the buffer of the trigger character
+  Serial.read();
+  // Write to defaults to eeprom
+  for (uint8_t i = 0; i < GEAR_COUNT; i++)
+  {
+    AnimationDriver::animation animBuff;
+    memcpy_P(&animBuff, &defaults[i], sizeof(animBuff));
+#ifdef DEBUG_EEPROM
+    Serial.print("Writing To: ");
+    Serial.println((int)(i * sizeof(animBuff)));
+#endif
+    EEPROM.put((int)(i * sizeof(AnimationDriver::animation)), animBuff);
+  }
+#ifdef DEBUG_EEPROM
+  Serial.println("DEFAULTS WRITTEN TO EEPROM");
+  Serial.flush();
+#endif
+}
 // Handle Serial Communication
 // This function runs whenever new data comes in
-// TODO uncomment
-/**
 void serialEvent()
 {
-  byte buffer[122];
-  // Data from the desktop should be a '_' character
-  char check = (char)Serial.read();
-  if (check == '_')
+  char data = ' ';
+  data = Serial.peek();
+  if (data == '!')
   {
-    // Send a confirmation character
-    Serial.println("ready");
-    //then read all bytes until a '\n' is sent
-    Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(byte));
+    EEPROM_WriteDefaults();
+  }
 
-    animation *animationBuf = (animation *)malloc(sizeof(animation));
-    animationBuf->frameCount = buffer[1];
-    // Parse bytes into animation structure
-    parseAnimation(buffer, animationBuf);
-    // Write to EEPROM
-    updateStoredMode(animationBuf, buffer[0]);
-    // Free buffer
-    free(animationBuf);
-  }
-  else
-  {
-    // Incorrect initial character, flush and try again
-    while (Serial.available() > 0)
-    {
-      Serial.read();
-    }
-    // Send error over tx
-    Serial.println("error");
-  }
+  // byte buffer[122];
+  // // Data from the desktop should be a '_' character
+  // char check = (char)Serial.read();
+  // if (check == '_')
+  // {
+  //   // Send a confirmation character
+  //   Serial.println("ready");
+  //   //then read all bytes until a '\n' is sent
+  //   Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(byte));
+
+  //   AnimationDriver::animation *animationBuf = (AnimationDriver::animation *)malloc(sizeof(AnimationDriver::animation));
+  //   animationBuf->frameCount = buffer[1];
+  //   // Parse bytes into animation structure
+  //   parseAnimation(buffer, animationBuf);
+  //   // Write to EEPROM
+  //   updateStoredMode(animationBuf, buffer[0]);
+  //   // Free buffer
+  //   free(animationBuf);
+  // }
+  // else
+  // {
+  //   // Incorrect initial character, flush and try again
+  //   while (Serial.available() > 0)
+  //   {
+  //     Serial.read();
+  //   }
+  //   // Send error over tx
+  //   Serial.println("error");
+  // }
 }
-*/
 
 /**
  * Parse animation from byte buffer into animation struct
@@ -130,7 +197,17 @@ void serialEvent()
 
 int getStickPos(int *stick1, int *stick2)
 {
-  return *stick1 - *stick2;
+  int sum = *stick1 + *stick2;
+  int diff = *stick1 - *stick2;
+  if (sum > 190)
+  {
+    return sum;
+  }
+  else
+  {
+    return diff;
+  }
+  // return *stick1 + *stick2;
 }
 
 int readStick1(bool override)
@@ -199,25 +276,47 @@ bool isMoving(int *stick1, int *stick2)
 
   return output;
 }
+
+void updateAnimator(ShifterFSM::mode *mode)
+{
+  static ShifterFSM::mode lastMode;
+  if (lastMode != *mode)
+  {
+    if (*mode == ShifterFSM::R)
+    {
+      currentAnim = SOLID_COLOR(0, 0, 0);
+    }
+    else if (*mode > 0 && *mode < 7)
+    {
+      EEPROM_Load(*mode - 1);
+    }
+    animator.updateAnimation(currentAnim);
+    lastMode = *mode;
+  }
+}
+
 void setup()
 {
-
   // Start Serial Communication
   Serial.begin(115200);
+  Serial.println("STARTING ");
   // LED Setup
   strip.begin();
   strip.show();
-
   // Initial Motor state
   MotorControl.init();
   // Initial Stick state
-  StickControl.init(getStickPos(readStick1(MotorControl.isRunning()), readStick2(MotorControl.isRunning())));
+  currentMode = StickControl.init(getStickPos(readStick1(MotorControl.isRunning()), readStick2(MotorControl.isRunning())));
   // Initial Brightness
   LEDscale = analogRead(POT_PIN);
   strip.setBrightness(LEDscale / 4);
   // Animation Controller
-  // Initialize timers
-  // loopTimer = millis();
+  updateAnimator(&currentMode);
+// Initialize timers
+// loopTimer = millis();
+#ifdef DEBUG_STICK_TUNE
+  strip.fill(strip.Color(255, 255, 255));
+#endif
 }
 
 void loop()
@@ -234,57 +333,32 @@ void loop()
   int stick1 = readStick1(MotorControl.isRunning());
   int stick2 = readStick2(MotorControl.isRunning());
 
-#ifdef DEBUG_MOVING
-  Serial.print(isMoving(&stick1, &stick2) ? "MOVING " : "");
-  Serial.flush();
-#endif
-
-#ifdef DEBUG_STICKS
-  Serial.print(" 1: ");
-  Serial.print(stick1);
-  Serial.print(" 2: ");
-  Serial.print(stick2);
-  Serial.flush();
-#endif
-
   currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
-#ifdef DEBUG_ANIMATION
-  animator.run([](uint8_t r, uint8_t g, uint8_t b) { strip.fill(strip.Color(r, g, b));strip.show(); });
 
-#endif
-
-#ifdef DEBUG_MOVING
-  ShifterFSM::mode currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
-#ifndef DEBUG_LED
-  if (isMoving(&stick1, &stick2))
-  {
-    strip.fill(strip.Color(0, 0, 0));
-  }
-  else
-  {
-    strip.fill(strip.Color(255, 255, 255));
-  }
-#endif
-#endif
-
-#ifdef DEBUG_MODE
-  Serial.print(" mode: ");
-  Serial.print(currentMode);
-  Serial.flush();
-
-#endif
-
-/************ MOTOR FSM ***********/
-#ifdef EN_MOTOR
+  /************ MOTOR & ANIMATION RESET TRIGGER ***********/
   if (StickControl.getFlag())
   {
+#ifdef EN_MOTOR
     MotorControl.trigger();
+#endif
+#ifdef EN_ANIMATION
+    updateAnimator(&currentMode);
+#endif
   }
   MotorControl.run();
+
+  /************ DRIVING LEDS ***********/
+  // Pass current animation, time stamp, brightness, into animation driving function
+#ifdef EN_ANIMATION
+  animator.run([](uint8_t r, uint8_t g, uint8_t b) { strip.fill(strip.Color(r, g, b));strip.show(); });
 #endif
 
-/************ DRIVING LEDS ***********/
-// Pass current animation, time stamp, brightness, into animation driving function
+
+  /************ DUBUGGING HELP ***********/
+#ifdef DEBUG_STICK_TUNE
+  strip.fill(strip.Color(255, 255, 255));
+  strip.show();
+#endif
 #ifdef DEBUG_LED
   switch (currentMode)
   {
@@ -319,7 +393,33 @@ void loop()
     break;
   }
   strip.show();
+#endif
 
+#ifdef DEBUG_MOVING
+  Serial.print(isMoving(&stick1, &stick2) ? "MOVING " : "");
+  ShifterFSM::mode currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
+#ifndef DEBUG_LED
+  if (isMoving(&stick1, &stick2))
+  {
+    strip.fill(strip.Color(0, 0, 0));
+  }
+  else
+  {
+    strip.fill(strip.Color(255, 255, 255));
+  }
+#endif
+#endif
+
+#ifdef DEBUG_STICKS
+  Serial.print(" 1: ");
+  Serial.print(stick1);
+  Serial.print(" 2: ");
+  Serial.print(stick2);
+#endif
+
+#ifdef DEBUG_MODE
+  Serial.print(" mode: ");
+  Serial.print(currentMode);
 #endif
 
 #ifdef DEBUG

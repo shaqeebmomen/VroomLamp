@@ -8,7 +8,7 @@ namespace AnimationDriver
     struct animFrame
     {
         uint8_t color[3]; // Color at this frame
-        uint16_t time;    // time in ms from the animation's start where this frame occurs
+        uint32_t time;    // time in ms from the animation's start where this frame occurs
     };
 
     // Structure that holds an entire animation
@@ -16,7 +16,7 @@ namespace AnimationDriver
     {
         animFrame frames[20]; // List of frames (fixed size array)
         uint8_t frameCount;   // Number of entries with useful data in the frames buffer
-        uint16_t time;        // Total runtime of this animation (redundant with "time" member of last relevant item in frames array)
+        uint32_t time;        // Total runtime of this animation (redundant with "time" member of last relevant item in frames array)
     };
 
     // Typedef for parent function that will call actually drive the LEDs

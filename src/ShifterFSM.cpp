@@ -13,10 +13,11 @@ ShifterFSM::ShifterFSM(sysTimeFunc getSysTime, unsigned long tSettle)
     _tSettle = tSettle;
 }
 
-void ShifterFSM::init(int val)
+ShifterFSM::mode ShifterFSM::init(int val)
 {
     // Set the initial state of the
     activeMode = getStickMode(val);
+    return activeMode;
 }
 
 // Get the mode corresponding to a given read hall effect value
