@@ -27,6 +27,7 @@
 // #define DEBUG_LED
 // #define DEBUG_STICK_TUNE
 // #define DEBUG_EEPROM
+// #define DEBUG_EEPROM_SERIAL
 
 // Routine enable flags
 #define EN_MOTOR
@@ -51,6 +52,10 @@
 #define T_MOVE_LOOP 30
 #define FILTER_BUFF 20
 #define GEAR_COUNT 6
+// Serial Constants
+#define SERIAL_PACKET 142
+#define FRAME_SIZE 7
+#define META_SIZE 2
 
 // unsigned long loopTimer;
 
@@ -65,9 +70,9 @@ AnimationDriver::AnimationDriver animator(millis);
 
 const AnimationDriver::animation Solid_White PROGMEM = SOLID_COLOR(255, 255, 255);
 const AnimationDriver::animation Solid_Red PROGMEM = SOLID_COLOR(255, 0, 0);
-const AnimationDriver::animation Breathe_White PROGMEM = BREATHE_COLOR(255, 255, 255, 2000);
+const AnimationDriver::animation Breathe_White PROGMEM = BREATHE_COLOR(255, 255, 255, 3000UL);
 const AnimationDriver::animation Solid_Green PROGMEM = SOLID_COLOR(0, 255, 0);
-const AnimationDriver::animation Rainbow PROGMEM = RAINBOW(2000);
+const AnimationDriver::animation Rainbow PROGMEM = RAINBOW(4000UL);
 const AnimationDriver::animation Solid_Blue PROGMEM = SOLID_COLOR(0, 0, 255);
 
 const AnimationDriver::animation defaults[] PROGMEM = {
@@ -93,7 +98,7 @@ void EEPROM_Load(uint8_t index)
   Serial.print(" Addr: ");
   Serial.println((int)(index * sizeof(currentAnim)));
 #endif
-  EEPROM.get((int)(index * sizeof(currentAnim)), currentAnim);
+  EEPROM.get((int)(index * sizeof(AnimationDriver::animation)), currentAnim);
 #ifdef DEBUG_EEPROM
   Serial.println(currentAnim.frameCount);
   Serial.println("Animation Loaded");
@@ -108,9 +113,6 @@ void EEPROM_WriteDefaults()
   Serial.println("RESETTING ANIMATIONS");
   Serial.flush();
 #endif
-
-  // Clear the buffer of the trigger character
-  Serial.read();
   // Write to defaults to eeprom
   for (uint8_t i = 0; i < GEAR_COUNT; i++)
   {
@@ -122,84 +124,15 @@ void EEPROM_WriteDefaults()
 #endif
     EEPROM.put((int)(i * sizeof(AnimationDriver::animation)), animBuff);
   }
-#ifdef DEBUG_EEPROM
   Serial.println("DEFAULTS WRITTEN TO EEPROM");
   Serial.flush();
-#endif
 }
-// Handle Serial Communication
-// This function runs whenever new data comes in
-void serialEvent()
-{
-  char data = ' ';
-  data = Serial.peek();
-  if (data == '!')
-  {
-    EEPROM_WriteDefaults();
-  }
-
-  // byte buffer[122];
-  // // Data from the desktop should be a '_' character
-  // char check = (char)Serial.read();
-  // if (check == '_')
-  // {
-  //   // Send a confirmation character
-  //   Serial.println("ready");
-  //   //then read all bytes until a '\n' is sent
-  //   Serial.readBytesUntil('\n', buffer, sizeof(buffer) / sizeof(byte));
-
-  //   AnimationDriver::animation *animationBuf = (AnimationDriver::animation *)malloc(sizeof(AnimationDriver::animation));
-  //   animationBuf->frameCount = buffer[1];
-  //   // Parse bytes into animation structure
-  //   parseAnimation(buffer, animationBuf);
-  //   // Write to EEPROM
-  //   updateStoredMode(animationBuf, buffer[0]);
-  //   // Free buffer
-  //   free(animationBuf);
-  // }
-  // else
-  // {
-  //   // Incorrect initial character, flush and try again
-  //   while (Serial.available() > 0)
-  //   {
-  //     Serial.read();
-  //   }
-  //   // Send error over tx
-  //   Serial.println("error");
-  // }
-}
-
-/**
- * Parse animation from byte buffer into animation struct
- * @param buffer the buffer where the serial data was stored
- * @param animation the animation buffer allocated to parse the data into
- */
-// void parseAnimation(byte *buffer, animation *animation)
-// {
-//   byte activeLength = 2 + animation->frameCount * sizeof(animFrame); // Length of populated items in buffer
-//   byte frame = 0;
-//   for (byte i = 2; i < activeLength; i += sizeof(animFrame))
-//   {
-//     animation->frames[frame].r = buffer[i];
-//     animation->frames[frame].g = buffer[i + 1];
-//     animation->frames[frame].b = buffer[i + 2];
-//     animation->frames[frame].bright = buffer[i + 3];
-//     // TODO Check if little endian vs big endian, current assumes big endian (most significant byte first)
-//     animation->frames[frame].time = (buffer[i + 4] << 8) | buffer[i + 5];
-//     if (i + sizeof(animFrame) >= activeLength) // Last iteration
-//     {
-//       // Save the total animation time
-//       animation->totalTime = animation->frames[frame].time;
-//     }
-//     frame++;
-//   }
-// }
 
 int getStickPos(int *stick1, int *stick2)
 {
   int sum = *stick1 + *stick2;
   int diff = *stick1 - *stick2;
-  if (sum > 190)
+  if (sum > 205)
   {
     return sum;
   }
@@ -207,7 +140,6 @@ int getStickPos(int *stick1, int *stick2)
   {
     return diff;
   }
-  // return *stick1 + *stick2;
 }
 
 int readStick1(bool override)
@@ -295,11 +227,138 @@ void updateAnimator(ShifterFSM::mode *mode)
   }
 }
 
+// Serial Methods
+
+// Parse out an animation object from a serial buffer and store in EEPROM
+void saveAnimationFromSerial(byte *buff)
+{
+  AnimationDriver::animation _a;
+  _a.frameCount = buff[1];
+  // For each frame
+  for (byte i = 0; i < buff[1]; i++)
+  {
+    byte baseIndex = i * FRAME_SIZE + 2;
+    _a.frames[i].color[0] = buff[baseIndex];                                                                                                                            // Red
+    _a.frames[i].color[1] = buff[baseIndex + 1];                                                                                                                        // Green
+    _a.frames[i].color[2] = buff[baseIndex + 2];                                                                                                                        // Blue
+    _a.frames[i].time = (uint32_t)buff[baseIndex + 3] << 24 | (uint32_t)buff[baseIndex + 4] << 16 | (uint32_t)buff[baseIndex + 5] << 8 | (uint32_t)buff[baseIndex + 6]; //time
+    if (i == buff[1] - 1)
+    {
+      _a.time = _a.frames[i].time;
+    }
+  }
+  EEPROM.put(buff[0] * sizeof(AnimationDriver::animation), _a);
+}
+
+// Handle an an upload request
+void handleUploadRequest()
+{
+  byte localBuff[SERIAL_PACKET];
+  byte buffCount = META_SIZE;
+  // Wait for first 2 bytes to come in
+  while (Serial.available() < META_SIZE)
+    ;
+  Serial.readBytes(localBuff, META_SIZE);
+
+  // While the pc is sending data, store it in the buffer
+  // Loop untill all bytes expected are read
+  while (buffCount < (localBuff[1] * FRAME_SIZE + META_SIZE))
+  {
+    // Let a byte come in
+    while (Serial.available() < 1)
+      ;
+    if (buffCount <= SERIAL_PACKET)
+    {
+      // Append to buffer
+      byte data = (byte)Serial.read();
+      localBuff[buffCount] = data;
+      buffCount++;
+    }
+    // Writing outside buffer space, send an error back
+    else
+    {
+      Serial.println();
+      return;
+    }
+  }
+  // Once all the data has been received, write it back to the pc
+  Serial.write(localBuff, buffCount);
+  // Read a check character (0x00 -> fail, 0xff -> success)
+  while (Serial.available() < 1)
+    ;
+  if ((byte)Serial.read() == 0xFF)
+  {
+    // Success
+    // Store data in memory if check character came back okay
+    saveAnimationFromSerial(localBuff);
+    // Send one more string back to indicate write finished
+  }
+  Serial.println("Done");
+}
+
+// Handle overall Serial Communication
+void handleSerial()
+{
+  // Read until code ends
+  String code = Serial.readStringUntil('-');
+  // Echo Back a ready string and acknowledge the code received
+  Serial.print(F("ready_"));
+  Serial.println(code);
+  Serial.flush();
+  // Do something useful with the intent code
+  switch (code[0])
+  {
+  case '0':
+  case '1':
+  case '2':
+  case '3':
+  case '4':
+  case '5':
+    handleUploadRequest();
+    break;
+  case 'd':
+    // read EEPROM Memory
+    break;
+  default:
+    Serial.println();
+    break;
+  }
+}
+
+// DEBUG Functions
+#ifdef DEBUG_EEPROM_SERIAL
+void EEPROM_Dump_Anim(uint8_t index)
+{
+  AnimationDriver::animation _anim;
+  EEPROM.get(index * sizeof(AnimationDriver::animation), _anim);
+  Serial.print(F("Animation at Index "));
+  Serial.println(index);
+  Serial.print(F("Frame Count: "));
+  Serial.println(_anim.frameCount);
+  Serial.print(F("Total Time: "));
+  Serial.println(_anim.time);
+  Serial.println(F("Frames: "));
+  for (uint8_t i = 0; i < _anim.frameCount; i++)
+  {
+    Serial.print(F("Frame: "));
+    Serial.println(i);
+    Serial.print(F("R: "));
+    Serial.println(_anim.frames[i].color[0]);
+    Serial.print(F("G: "));
+    Serial.println(_anim.frames[i].color[1]);
+    Serial.print(F("B: "));
+    Serial.println(_anim.frames[i].color[2]);
+    Serial.print(F("Time: "));
+    Serial.println(_anim.frames[i].time);
+  }
+}
+#endif
+
 void setup()
 {
   // Start Serial Communication
   Serial.begin(115200);
-  Serial.println("STARTING ");
+  Serial.println(F("ready"));
   // LED Setup
   strip.begin();
   strip.show();
@@ -317,42 +376,60 @@ void setup()
 #ifdef DEBUG_STICK_TUNE
   strip.fill(strip.Color(255, 255, 255));
 #endif
+
+#ifdef DEBUG_EEPROM_SERIAL
+  for (uint8_t i = 0; i < 6; i++)
+  {
+    Serial.println(F("------------------------"));
+    EEPROM_Dump_Anim(i);
+    delay(1000);
+  }
+  Serial.println(F("------------------------"));
+#endif
 }
 
 void loop()
 {
-  /************ BRIGHTNESS KNOB ***********/
-  LEDscale = analogRead(POT_PIN) / 4;
-  if (abs(LEDscale - prevLEDScale) > POT_THRES)
+  if (Serial.available() > 0)
   {
-    strip.setBrightness(LEDscale);
-    prevLEDScale = LEDscale;
-  }
-
-  /************ HANDLING STICK INPUT ***********/
-  int stick1 = readStick1(MotorControl.isRunning());
-  int stick2 = readStick2(MotorControl.isRunning());
-
-  currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
-
-  /************ MOTOR & ANIMATION RESET TRIGGER ***********/
-  if (StickControl.getFlag())
-  {
-#ifdef EN_MOTOR
-    MotorControl.trigger();
-#endif
-#ifdef EN_ANIMATION
+    // Handle Serial Request
+    handleSerial();
     updateAnimator(&currentMode);
+  }
+  else
+  {
+    /************ BRIGHTNESS KNOB ***********/
+    LEDscale = analogRead(POT_PIN) / 4;
+    if (abs(LEDscale - prevLEDScale) > POT_THRES)
+    {
+      strip.setBrightness(LEDscale);
+      prevLEDScale = LEDscale;
+    }
+
+    /************ HANDLING STICK INPUT ***********/
+    int stick1 = readStick1(MotorControl.isRunning());
+    int stick2 = readStick2(MotorControl.isRunning());
+
+    currentMode = StickControl.run(getStickPos(&stick1, &stick2), isMoving(&stick1, &stick2));
+
+    /************ MOTOR & ANIMATION RESET TRIGGER ***********/
+    if (StickControl.getFlag())
+    {
+#ifdef EN_MOTOR
+      MotorControl.trigger();
+#endif
+#ifdef EN_ANIMATION
+      updateAnimator(&currentMode);
+#endif
+    }
+    MotorControl.run();
+
+    /************ DRIVING LEDS ***********/
+    // Pass current animation, time stamp, brightness, into animation driving function
+#ifdef EN_ANIMATION
+    animator.run([](uint8_t r, uint8_t g, uint8_t b) { strip.fill(strip.Color(r, g, b));strip.show(); });
 #endif
   }
-  MotorControl.run();
-
-  /************ DRIVING LEDS ***********/
-  // Pass current animation, time stamp, brightness, into animation driving function
-#ifdef EN_ANIMATION
-  animator.run([](uint8_t r, uint8_t g, uint8_t b) { strip.fill(strip.Color(r, g, b));strip.show(); });
-#endif
-
 
   /************ DUBUGGING HELP ***********/
 #ifdef DEBUG_STICK_TUNE

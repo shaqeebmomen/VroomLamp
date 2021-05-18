@@ -13,10 +13,10 @@
 #define LIGHT_1 298
 #define LIGHT_2 100
 #define LIGHT_3 -19
-#define LIGHT_4 212
+#define LIGHT_4 220
 #define LIGHT_5 435
 #define LIGHT_6 -105
-#define LIGHT_THRES 40
+#define LIGHT_THRES 30
 
 // Typedef for system time function
 typedef unsigned long (*sysTimeFunc)();
