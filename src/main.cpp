@@ -133,15 +133,68 @@ void EEPROM_WriteDefaults()
 
 int getStickPos(int *stick1, int *stick2)
 {
-  int sum = *stick1 + *stick2;
-  int diff = *stick1 - *stick2;
-  if (sum > 205)
+
+#define STICK_THRES 30
+// R
+#define GR_1 64
+#define GR_2 10
+// 1
+#define G1_1 271
+#define G1_2 25
+// 2
+#define G2_1 114
+#define G2_2 10
+// 3
+#define G3_1 78
+#define G3_2 98
+// 4
+#define G4_1 99
+#define G4_2 110
+// 5
+#define G5_1 26
+#define G5_2 402
+// 6
+#define G6_1 18
+#define G6_2 126
+
+  // R
+  if (abs(*stick1 - GR_1) < STICK_THRES && abs(*stick2 - GR_2) < STICK_THRES)
   {
-    return sum;
+    return 0;
+  }
+  // 1
+  else if (abs(*stick1 - G1_1) < STICK_THRES && abs(*stick2 - G1_2) < STICK_THRES)
+  {
+    return 1;
+  }
+  // 2
+  else if (abs(*stick1 - G2_1) < STICK_THRES && abs(*stick2 - G2_2) < STICK_THRES)
+  {
+    return 2;
+
+  } // 3
+  else if (abs(*stick1 - G3_1) < STICK_THRES && abs(*stick2 - G3_2) < STICK_THRES && *stick1 < 90)
+  {
+    return 3;
+
+  } // 4
+  else if (abs(*stick1 - G4_1) < STICK_THRES && abs(*stick2 - G4_2) < STICK_THRES)
+  {
+    return 4;
+
+  } // 5
+  else if (abs(*stick1 - G5_1) < STICK_THRES && abs(*stick2 - G5_2) < STICK_THRES)
+  {
+    return 5;
+  }
+  // 6
+  else if (abs(*stick1 - G6_1) < STICK_THRES && abs(*stick2 - G6_2) < STICK_THRES)
+  {
+    return 6;
   }
   else
   {
-    return diff;
+    return 7;
   }
 }
 
@@ -580,9 +633,9 @@ void loop()
 
 #ifdef DEBUG_STICKS
   Serial.print(" 1: ");
-  Serial.print(stick1);
+  Serial.print(analogRead(STICK_PIN_1));
   Serial.print(" 2: ");
-  Serial.print(stick2);
+  Serial.print(analogRead(STICK_PIN_2));
 #endif
 
 #ifdef DEBUG_MODE

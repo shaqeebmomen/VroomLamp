@@ -1,23 +1,3 @@
-#include <WString.h>
-
-// Stick Position Constants
-// #define LIGHT_R 67
-// #define LIGHT_1 284
-// #define LIGHT_2 122
-// #define LIGHT_3 175
-// #define LIGHT_4 212
-// #define LIGHT_5 435
-// #define LIGHT_6 141
-
-#define LIGHT_R 51
-#define LIGHT_1 298
-#define LIGHT_2 100
-#define LIGHT_3 -19
-#define LIGHT_4 220
-#define LIGHT_5 435
-#define LIGHT_6 -105
-#define LIGHT_THRES 30
-
 // Typedef for system time function
 typedef unsigned long (*sysTimeFunc)();
 
@@ -37,10 +17,8 @@ public:
         NEUTRAL
     }; // lighting modes
     ShifterFSM(sysTimeFunc, unsigned long);
-    mode init(int);           // Initialize the shifter with a value
-    mode run(int, bool);      // FSM loop to run controller
-    String getModeName(mode); // Get the string representation of the passed in mode
-    String getModeName();     // Get the string representation of the current mode
+    mode init(int);      // Initialize the shifter with a value
+    mode run(int, bool); // FSM loop to run controller
     bool getFlag();
 
 private:

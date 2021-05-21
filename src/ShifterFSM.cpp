@@ -23,38 +23,33 @@ ShifterFSM::mode ShifterFSM::init(int val)
 // Get the mode corresponding to a given read hall effect value
 ShifterFSM::mode ShifterFSM::getStickMode(int val)
 {
-
-    if (abs(val - LIGHT_R) < LIGHT_THRES)
+    switch (val)
     {
+    case 0:
         return ShifterFSM::R;
-    }
-    else if (abs(val - LIGHT_1) < LIGHT_THRES)
-    {
+        break;
+
+    case 1:
         return ShifterFSM::ONE;
-    }
-    else if (abs(val - LIGHT_2) < LIGHT_THRES)
-    {
+        break;
+    case 2:
         return ShifterFSM::TWO;
-    }
-    else if (abs(val - LIGHT_3) < LIGHT_THRES)
-    {
+        break;
+    case 3:
         return ShifterFSM::THREE;
-    }
-    else if (abs(val - LIGHT_4) < LIGHT_THRES)
-    {
+        break;
+    case 4:
         return ShifterFSM::FOUR;
-    }
-    else if (abs(val - LIGHT_5) < LIGHT_THRES)
-    {
+        break;
+    case 5:
         return ShifterFSM::FIVE;
-    }
-    else if (abs(val - LIGHT_6) < LIGHT_THRES)
-    {
+        break;
+    case 6:
         return ShifterFSM::SIX;
-    }
-    else
-    {
+        break;
+    default:
         return ShifterFSM::NEUTRAL;
+        break;
     }
 }
 
@@ -141,53 +136,6 @@ ShifterFSM::mode ShifterFSM::run(int val, bool isMoving)
 
 #endif
     return activeMode;
-}
-
-String ShifterFSM::getModeName()
-{
-    return getModeName(activeMode);
-}
-
-String ShifterFSM::getModeName(mode m)
-{
-    switch (m)
-    {
-    case R:
-        return "Reverse";
-        break;
-
-    case ONE:
-        return "One";
-        break;
-
-    case TWO:
-        return "Two";
-        break;
-
-    case THREE:
-        return "Three";
-        break;
-
-    case FOUR:
-        return "Four";
-        break;
-
-    case FIVE:
-        return "Five";
-        break;
-
-    case SIX:
-        return "Six";
-        break;
-
-    case NEUTRAL:
-        return "Neutral";
-        break;
-
-    default:
-        return "Unknown";
-        break;
-    }
 }
 
 bool ShifterFSM::getFlag()
