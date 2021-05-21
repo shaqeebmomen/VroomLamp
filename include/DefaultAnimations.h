@@ -5,7 +5,7 @@
 // Macro used to generate struct for solid colors
 #define SOLID_COLOR(r, g, b) ((struct AnimationDriver::animation){{                     \
                                                                       {{r, g, b}, 0},   \
-                                                                      {{r, g, b}, 100}, \
+                                                                      {{r, g, b}, 500}, \
                                                                   },                    \
                                                                   2,                    \
                                                                   100})

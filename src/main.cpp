@@ -89,6 +89,9 @@ AnimationDriver::animation currentAnim;
 uint16_t LEDscale;
 uint16_t prevLEDScale;
 
+// Function used for resetting programmatically
+void (*resetFunc)(void) = 0;
+
 // Load specific animation from eeprom into currentAnim
 void EEPROM_Load(uint8_t index)
 {
@@ -250,6 +253,41 @@ void saveAnimationFromSerial(byte *buff)
   EEPROM.put(buff[0] * sizeof(AnimationDriver::animation), _a);
 }
 
+// Waits for acknowledge byte (0xff) from pc
+bool waitForAck(uint32_t timeout)
+{
+  // Start timer
+  uint32_t timer = millis();
+  //  Serial.println(F("Waiting for ACK"));
+  while (true)
+  {
+    // Check for Serial data or
+    if (Serial.available() > 0)
+    {
+      uint8_t ack = (byte)Serial.read();
+      if (ack == 0xff)
+      {
+        // Success
+        return true;
+      }
+      else
+      {
+        // fail
+        Serial.println(F("ACK Fail"));
+        Serial.flush();
+        return false;
+      }
+    }
+    // Check if timer has ran out
+    else if (millis() - timer > timeout)
+    {
+      Serial.println(F("ACK Fail"));
+      Serial.flush();
+      return false;
+    }
+  }
+}
+
 // Handle an an upload request
 void handleUploadRequest()
 {
@@ -284,16 +322,68 @@ void handleUploadRequest()
   // Once all the data has been received, write it back to the pc
   Serial.write(localBuff, buffCount);
   // Read a check character (0x00 -> fail, 0xff -> success)
-  while (Serial.available() < 1)
-    ;
-  if ((byte)Serial.read() == 0xFF)
+  if (waitForAck(1000))
   {
     // Success
     // Store data in memory if check character came back okay
     saveAnimationFromSerial(localBuff);
     // Send one more string back to indicate write finished
+    Serial.println(F("Done"));
+    Serial.flush();
   }
-  Serial.println("Done");
+  else
+  {
+    resetFunc();
+  }
+}
+
+// Handle request for download
+void handleDownloadRequest()
+{
+  for (uint8_t i = 0; i < 6; i++)
+  {
+    AnimationDriver::animation _a;
+    EEPROM.get(i * sizeof(AnimationDriver::animation), _a);
+    // Write the frame count
+    if (!waitForAck(1000))
+    {
+      resetFunc();
+    }
+    Serial.write(i);
+    Serial.write(_a.frameCount);
+    Serial.flush();
+    // Wait for an acknowledge or timeout
+    if (!waitForAck(1000))
+    {
+      resetFunc();
+    }
+    // Send rest of animation frames
+    // Parse animation object into uint8_t array
+    uint8_t frameBuff[_a.frameCount * FRAME_SIZE];
+    for (uint8_t frame = 0; frame < _a.frameCount; frame++)
+    {
+      uint8_t baseIndex = frame * FRAME_SIZE;
+      // Red
+      frameBuff[baseIndex] = _a.frames[frame].color[0];
+      // Green
+      frameBuff[baseIndex + 1] = _a.frames[frame].color[1];
+      // Blue
+      frameBuff[baseIndex + 2] = _a.frames[frame].color[2];
+      // Timestamp (four bytes)
+      frameBuff[baseIndex + 3] = (uint8_t)(_a.frames[frame].time >> 24);
+      frameBuff[baseIndex + 4] = (uint8_t)(_a.frames[frame].time >> 16);
+      frameBuff[baseIndex + 5] = (uint8_t)(_a.frames[frame].time >> 8);
+      frameBuff[baseIndex + 6] = (uint8_t)(_a.frames[frame].time);
+    }
+    // Send buffer
+    Serial.write(frameBuff, _a.frameCount * FRAME_SIZE);
+    Serial.flush();
+    // Wait for acknowledge or timeout
+    if (!waitForAck(1000))
+    {
+      resetFunc();
+    }
+  }
 }
 
 // Handle overall Serial Communication
@@ -317,7 +407,7 @@ void handleSerial()
     handleUploadRequest();
     break;
   case 'd':
-    // read EEPROM Memory
+    handleDownloadRequest();
     break;
   default:
     Serial.println();
@@ -395,6 +485,7 @@ void loop()
     // Handle Serial Request
     handleSerial();
     updateAnimator(&currentMode);
+    resetFunc();
   }
   else
   {
