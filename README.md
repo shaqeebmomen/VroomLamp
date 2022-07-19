@@ -6,6 +6,7 @@ Code for a shard light that uses a shift stick to pick animations. Animations ar
 - Shifter stick is used to select lighting animations as if they were "gears"
 - Lamp interpolates through frames of the animation and cycles the correct colors
 - Upon shifting, a motor will vibrate the lamp to provide tactile feedback
+- Support for [custom app](https://github.com/shaqeebmomen/LampStation) to create and load animations for lightings
 
 ## Key Features
 - Everything custom designed/printed (knob in resin, housing in plastice) & wired aside from acrylic
